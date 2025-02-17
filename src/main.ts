@@ -70,7 +70,8 @@ const mediumQuestions: QuizItem[] = [
   },
 ];
 
-// Проверка существования DOM-элемента
+// Функция-ассертер: убеждаемся, что значение не null/undefined.
+// После вызова этой функции TypeScript понимает, что value точно не null.
 function assertExists<T>(
   value: T | null | undefined,
   message: string
@@ -80,61 +81,155 @@ function assertExists<T>(
   }
 }
 
-// Получаем элемент div с id="content"
-const contentDiv = document.getElementById("content");
-assertExists(contentDiv, 'Element with id="content" not found.');
+// Показываем финальное окно (модальное) с результатами после окончания викторины
+function showFinalResults(correctCount: number, incorrectCount: number) {
+  // Создаём полупрозрачный фон (бэкдроп)
+  const overlay = document.createElement("div");
+  overlay.className =
+    "fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50";
 
-// Функция для отображения викторины
+  // Контейнер для контента (белый блок)
+  const modalContainer = document.createElement("div");
+  modalContainer.className = "bg-white p-6 rounded shadow-md text-center w-80";
+
+  // Заголовок
+  const heading = document.createElement("h2");
+  heading.className = "text-2xl font-bold mb-4";
+  heading.textContent = "Die Endergebnisse";
+  modalContainer.appendChild(heading);
+
+  // Текст с подсчётом
+  const textResults = document.createElement("p");
+  textResults.className = "mb-4";
+  textResults.textContent = `Richtig: ${correctCount} | Falsch: ${incorrectCount}`;
+  modalContainer.appendChild(textResults);
+
+  // Кнопка «Закрыть»
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Schließen";
+  closeBtn.className =
+    "px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700";
+  closeBtn.addEventListener("click", () => {
+    // Удаляем оверлей при закрытии
+    overlay.remove();
+  });
+  modalContainer.appendChild(closeBtn);
+
+  // Собираем всё в документ
+  overlay.appendChild(modalContainer);
+  document.body.appendChild(overlay);
+}
+
+// Главная функция для отображения викторины
 function displayQuiz(questions: QuizItem[]) {
+  // Получаем контейнер div#content
+  const contentDiv = document.getElementById("content");
   assertExists(contentDiv, 'Element with id="content" not found.');
+
+  // Счётчики правильных/неправильных
+  let correctCount = 0;
+  let incorrectCount = 0;
+
+  // Отдельный счёт, чтобы узнать, когда все вопросы отвечены
+  let answeredQuestions = 0;
+  const totalQuestions = questions.length;
+
+  // Блок для отображения результатов во время ответов
+  const resultDiv = document.createElement("div");
+  resultDiv.className = "text-center mt-6 text-lg font-semibold";
+  resultDiv.textContent = `Richtig: ${correctCount} | Falsch: ${incorrectCount}`;
+  contentDiv.appendChild(resultDiv);
+
+  // Генерируем список вопросов
   questions.forEach((item, index) => {
+    // Контейнер одного вопроса
     const questionContainer = document.createElement("div");
     questionContainer.className =
       "quiz-item bg-white shadow-md rounded-lg p-6 mb-6";
 
-    // Добавляем изображение
+    // Изображение
     const image = document.createElement("img");
     image.src = item.url;
     image.alt = `Question ${index + 1}`;
     image.className = "rounded-lg w-full mb-4";
     questionContainer.appendChild(image);
 
-    // Добавляем текст вопроса
+    // Текст вопроса
     const questionText = document.createElement("h2");
     questionText.textContent = `${index + 1}. ${item.question}`;
     questionText.className = "text-xl font-semibold mb-4 text-center";
     questionContainer.appendChild(questionText);
 
-    // Добавляем варианты ответа
+    // Контейнер для вариантов
     const choicesList = document.createElement("ul");
     choicesList.className =
-      "flex flex-row justify-center items-center space-x-4";
+      "flex flex-row flex-wrap justify-center items-center gap-4";
 
+    let answered = false; // Флаг, что ответ на этот вопрос уже выбран
+    const buttons: HTMLButtonElement[] = [];
+
+    // Генерируем варианты ответов
     item.choices.forEach((choice) => {
       const listItem = document.createElement("li");
 
       const button = document.createElement("button");
       button.textContent = choice.toString();
       button.className =
-        "w-full  px-6 py-3 bg-blue-500 text-white font-medium rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition";
+        "px-6 py-3 bg-blue-500 text-white font-medium rounded-lg " +
+        "shadow hover:bg-blue-700 focus:outline-none focus:ring-2 " +
+        "focus:ring-blue-400 focus:ring-offset-2 transition";
+
+      // Обработчик выбора варианта
       button.addEventListener("click", () => {
+        if (answered) return; // Нельзя выбирать повторно
+        answered = true;
+        answeredQuestions++; // Ещё один вопрос отвечен
+
+        // Проверяем правильность
         if (choice === item.answer) {
-          alert("Correct ✅!");
+          button.classList.remove(
+            "bg-blue-500",
+            "hover:bg-blue-700",
+            "focus:ring-blue-400"
+          );
+          button.classList.add("bg-green-500");
+          correctCount++;
         } else {
-          alert("Wrong answer ❌.");
+          button.classList.remove(
+            "bg-blue-500",
+            "hover:bg-blue-700",
+            "focus:ring-blue-400"
+          );
+          button.classList.add("bg-red-500");
+          incorrectCount++;
+        }
+
+        // Обновляем счётчик «по ходу»
+        resultDiv.textContent = `Richtig: ${correctCount} | Falsch: ${incorrectCount}`;
+
+        // Отключаем все кнопки в текущем вопросе
+        buttons.forEach((btn) => {
+          btn.disabled = true;
+        });
+
+        // Если все вопросы отвечены, показываем итоговое окно
+        if (answeredQuestions === totalQuestions) {
+          showFinalResults(correctCount, incorrectCount);
         }
       });
 
+      // Добавляем кнопку и li в список
+      buttons.push(button);
       listItem.appendChild(button);
       choicesList.appendChild(listItem);
     });
 
+    // Добавляем список ответов в контейнер вопроса
     questionContainer.appendChild(choicesList);
-
     // Добавляем вопрос в основной контейнер
     contentDiv.appendChild(questionContainer);
   });
 }
 
-// Вызываем функцию для отображения викторины
+// Запуск викторины
 displayQuiz(mediumQuestions);
